@@ -1,0 +1,45 @@
+<HTML>
+<HEAD>
+<title>动态添加/删除HTML元素</title>
+<script   language="javascript">   
+    var count= 0 ;   
+    var maxfile = 5;
+     增加元素
+    function addUpload() {  
+        if(count >= maxfile)    return;//限制最多maxfile个文件框
+        count++; 
+        //自增id不同的HTML对象，并附加到容器最后
+        var newDiv =  "<div id=divUpload" + count +">"
+            + " <input id=file" + count + " type=file size=50 name=upload>"
+            + " <a href=javascript:delUpload('divUpload" + count + "');>删除</a>"
+            + " </div>";   
+          document.getElementById("uploadContent").insertAdjacentHTML("beforeEnd", newDiv);     
+    }   
+    //删除指定元素
+    function delUpload(diva) {  
+        count--; 
+        document.getElementById(diva).parentNode.removeChild(document.getElementById(diva));   
+    }   
+  </script>
+</HEAD>
+<body   MS_POSITIONING="GridLayout">
+<form   id="Form1"   method="post"   runat="server"   enctype="multipart/form-data">
+  <div>
+    <table>
+      <tr>
+        <td   id="tdRrmove"   width="2000">
+        <!--承接整个file文件框的HTML容器-->
+        <div id="uploadContent">
+            <!--默认的file文件框
+       <div id=div1><input id=file1 type=file size=50 name=upload></div>-->
+        </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <a href="javascript:addUpload()">添加附件</a>
+  <br/>
+  <br/>
+</form>
+</body>
+</HTML>
