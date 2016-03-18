@@ -126,9 +126,11 @@ static int32_t process_app_settings_page( const char* url_parameters, wiced_tcp_
 	wiced_tcp_stream_write( stream, dct_wifi_config->soft_ap_settings.security_key, (uint16_t) dct_wifi_config->soft_ap_settings.security_key_length);
 
 	wiced_tcp_stream_write( stream, SCRIPT_JSON_PT3, sizeof(SCRIPT_JSON_PT3)-1 );
+#if 0
 	if(dct_wifi_config->soft_ap_settings.ssid_hide == WICED_TRUE)
 		wiced_tcp_stream_write( stream, "true", 4 );
 	else
+#endif
 		wiced_tcp_stream_write( stream, "false", 5 );
 
 	wiced_tcp_stream_write( stream, SCRIPT_JSON_PT6, sizeof(SCRIPT_JSON_PT6)-1 );
@@ -218,12 +220,12 @@ static int32_t process_config_save( const char* url_parameters, wiced_tcp_stream
 		memcpy(dct_wifi_config->soft_ap_settings.security_key, tmp_buf, strlen(tmp_buf) + 1);
 		dct_wifi_config->soft_ap_settings.security_key_length = strlen(tmp_buf);
 	}
-
+#if 0
 	res = url_para_get_int(url_parameters, "hidden_ssid", &tmp_value);
 	if(res == 0) {
 		dct_wifi_config->soft_ap_settings.ssid_hide= (uint8_t)tmp_value;
 	}
-
+#endif
 	res = url_para_get_str(url_parameters, "sta_ssid", tmp_buf, sizeof(tmp_buf));
 	if(res == 0) {
 		memcpy(dct_wifi_config->stored_ap_list[0].details.SSID.value, tmp_buf, strlen(tmp_buf) + 1);

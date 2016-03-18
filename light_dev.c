@@ -106,6 +106,7 @@ wiced_result_t light_dev_init(light_dev_t **light_dev_arg, wiced_worker_thread_t
 	for(i = 0; i < sizeof(light_list)/sizeof(light_t); i++) {
 		light_list[i].owner = light_dev;
 		light_list[i].status = light_status & (0x01 << i);
+		wiced_gpio_init(light_list[i].relay_io, OUTPUT_PUSH_PULL);
 		set_light_status_internal(&light_list[i], light_list[i].status);
 	}
 	*light_dev_arg = light_dev;
@@ -118,7 +119,7 @@ void switch_light_status(light_t *light)
 	wiced_bool_t gpio_status;
 	light_dev_t *light_dev = light->owner;
 
-	light_status_t status = get_light_status_internal(light);
+	light_status_t status = light->status;
 
 	if(status == LIGHT_STATUS_ON) {
 		set_light_status_internal(light, LIGHT_STATUS_OFF);
@@ -142,7 +143,7 @@ static void set_light_status_internal(light_t *light, light_status_t status)
 	}
 	return;
 }
-
+# if 0
 static light_status_t get_light_status_internal(light_t *light)
 {
 	light_status_t status;
@@ -154,7 +155,7 @@ static light_status_t get_light_status_internal(light_t *light)
 		status = LIGHT_STATUS_OFF;
 	return status;
 }
-
+#endif
 int set_light_status(uint8_t light_no, light_status_t status)
 {
 	int i;
@@ -175,7 +176,7 @@ light_status_t get_light_status(uint8_t light_no)
 
 	for(i = 0; i < sizeof(light_list)/sizeof(light_t); i++) {
 		if(light_no == light_list[i].light_no) {
-			light_status = get_light_status_internal(&light_list[i]);
+			light_status = light_list[i].status;
 		}
 	}
 	return light_status;
@@ -189,7 +190,7 @@ void get_lights_status(uint8_t *light_count, uint8_t *lights_status)
 	*light_count = 7;
 	for(i = 0; i < sizeof(light_list)/sizeof(light_t); i++) {
 		if(light_list[i].light_no >0 && light_list[i].light_no < 8) {
-			*lights_status |= (get_light_status_internal(&light_list[i]) & 0x01) << (light_list[i].light_no - 1);
+			*lights_status |= (light_list[i].status & 0x01) << (light_list[i].light_no - 1);
 		}
 	}
 }
