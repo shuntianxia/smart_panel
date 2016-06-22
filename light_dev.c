@@ -68,13 +68,11 @@ static light_t light_list[] =
 		.key_code = KEY_3,
 		.relay_io = RELAY_GPIO_3,
 	},
-#if 0
 	{
 		.light_no = 4,
 		.key_code = KEY_4,
 		.relay_io = RELAY_GPIO_4,
 	},
-#endif
 };
 
 

@@ -40,15 +40,7 @@
         var x=document.getElementById("settings_form");
         for (var i=0;i<x.length; i++)
         {
-            var ctrl = x.elements[i];
-            if (ctrl.name == "hidden_ssid") {
-                //对于单选按钮独立处理
-                if (ctrl.checked) {
-                    s += ctrl.name + "=" + encodeURIComponent(ctrl.value) + "&";
-                }
-            } else {
-                s += ctrl.name + "=" + encodeURIComponent(ctrl.value) + "&";
-            }
+            s += x.elements[i].name + "=" + encodeURIComponent(x.elements[i].value) + "&";
         }
         do_ajax('/config_save?' + s, ajax_handler);
       }
@@ -117,15 +109,8 @@
             <td><input type="text" class="ctrlid" name="ap_ssid" value="" id="ap_ssid" /></td></tr>
             <tr><td class="nameid">SoftAP password</td>
             <td><input type="text" class="ctrlid" name="ap_passwd" value="abcd1234" id="ap_passwd" /></td></tr>
-            <tr><td class="nameid">Whether to hide the SSID</td>
-            <td><label>
-                <input id="is hidden ssid" type="radio" name="hidden_ssid" value="1" />
-                yes
-            </label>
-            <label>
-                <input type="radio" name="hidden_ssid" value="0" checked="checked" />
-                no
-            </label></td></tr>
+			<tr><td class="nameid">Device ID</td>
+            <td><input type="text" class="ctrlid" name="dev_id" value="" id="dev_id" disabled="true"/></td></tr>
             <tr><td class="nameid">Station SSID</td>
             <td><input type="text" class="ctrlid" name="sta_ssid" value="" id="sta_ssid" /></td></tr>
             <tr><td class="nameid">Station password</td>
@@ -136,37 +121,16 @@
                 <option value=1>light</option>
                 <option value=2>curtain</option>
             </select></td></tr>
-            <tr><td class="nameid">Device node index</td>
-            <td><select type="number" class="ctrlid" name="dev_index" id="dev_index">
-				<option value="0">0</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-                <option value="6">6</option>
-                <option value="7">7</option>
-                <option value="8">8</option>
-            </select></td></tr>
 			<tr><td class="nameid">Device name</td>
             <td><input type="text" class="ctrlid" name="dev_name" value="" id="dev_name" /></td></tr>
     <script type="text/javascript">
         function init_form() {
-            document.getElementById("ap_ssid").value = jsonObj.ap_ssid;
+            document.getElementById("dev_id").value = jsonObj.dev_id;
+			document.getElementById("ap_ssid").value = jsonObj.ap_ssid;
             document.getElementById("ap_passwd").value = jsonObj.ap_passwd;
-            var hidden_ssids = document.getElementsByName("hidden_ssid");
-            var i = 0;
-            for (i = 0; i < hidden_ssids.length; i++) {//遍历单选框
-                if (hidden_ssids[i].value == jsonObj.hidden_ssid) {
-                    hidden_ssids[i].checked = true;
-                } else {
-                    hidden_ssids[i].checked = false;
-                }
-            }
 			document.getElementById("sta_ssid").value = jsonObj.sta_ssid;
             document.getElementById("sta_passwd").value = jsonObj.sta_passwd;
             document.getElementById("dev_type").value = jsonObj.dev_type;
-            document.getElementById("dev_index").value = jsonObj.dev_index;
 			document.getElementById("dev_name").value = jsonObj.dev_name;
         }
 

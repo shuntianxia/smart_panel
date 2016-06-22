@@ -28,6 +28,8 @@
  ******************************************************/
 
 #define DEBOUNCE_TIME_MS         (150)
+#define UART_RECEIVE_STACK_SIZE (6200)
+#define RX_BUFFER_SIZE    64
 
 /******************************************************
  *                   Enumerations
@@ -78,11 +80,34 @@ static void device_process_uart_msg(uint32_t arg);
 /******************************************************
  *               Variable Definitions
  ******************************************************/
+static wiced_thread_t uart_thread;
 static uart_keypad_internal_t* keypad_internal;
+static wiced_uart_config_t uart_config =
+{
+    .baud_rate    = 9600,
+    .data_width   = DATA_WIDTH_8BIT,
+    .parity       = NO_PARITY,
+    .stop_bits    = STOP_BITS_1,
+    .flow_control = FLOW_CONTROL_DISABLED,
+};
+
+static wiced_ring_buffer_t rx_buffer;
+static uint8_t rx_data[RX_BUFFER_SIZE];
 
 /******************************************************
  *               Function Definitions
  ******************************************************/
+wiced_result_t uart_receive_enable(wiced_thread_function_t function)
+{
+	/* Initialise ring buffer */
+	ring_buffer_init(&rx_buffer, rx_data, RX_BUFFER_SIZE );
+
+	/* Initialise UART. A ring buffer is used to hold received characters */
+	wiced_uart_init( WICED_UART_2, &uart_config, &rx_buffer );
+
+	wiced_rtos_create_thread(&uart_thread, WICED_NETWORK_WORKER_PRIORITY, "uart receive thread", function, UART_RECEIVE_STACK_SIZE, 0);
+	return WICED_SUCCESS;
+}
 
 wiced_result_t uart_keypad_enable( uart_keypad_t* keypad, wiced_worker_thread_t* thread, uart_keypad_handler_t function, uint32_t held_event_interval_ms)
 {

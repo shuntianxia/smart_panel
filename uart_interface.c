@@ -13,7 +13,6 @@
  */
 #include "wiced.h"
 #include "uart_interface.h"
-#include "net_interface.h"
 #include "wiced_time.h"
 #include "wiced_rtos.h"
 #include "wiced_utilities.h"
@@ -81,7 +80,7 @@ wiced_result_t uart_receive_enable(wiced_thread_function_t function)
     ring_buffer_init(&rx_buffer, rx_data, RX_BUFFER_SIZE );
 
     /* Initialise UART. A ring buffer is used to hold received characters */
-    wiced_uart_init( WICED_UART_2, &uart_config, &rx_buffer );
+    wiced_uart_init( E200_UART, &uart_config, &rx_buffer );
 
 	wiced_rtos_create_thread(&uart_thread, WICED_NETWORK_WORKER_PRIORITY, "uart receive thread", function, UART_RECEIVE_STACK_SIZE, 0);
 	return WICED_SUCCESS;

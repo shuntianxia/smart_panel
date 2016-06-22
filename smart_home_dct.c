@@ -49,7 +49,6 @@ DEFINE_APP_DCT(smart_home_app_dct_t)
 {
 	.device_configured = 0x00,
     //.dev_type = DEV_TYPE_UNKNOWN,
-	.dev_index = 0,
 	//.dev_name_length = 4,
 	.dev_name = "Unnamed device",
 	.specific.light_config.light_status = 0x00,

@@ -13,13 +13,14 @@ NAME := App_Smart_home
 $(NAME)_SOURCES := smart_home.c \
 				   device_config.c \
 				   device_config_content.c \
-				   uart_interface.c \
 				   uart_keypad.c \
 				   light_dev.c \
 				   curtain_dev.c \
-				   uart_master_ctrl.c \
-				   net_interface.c \
+				   cJSON/cJSON.c \
+				   list.h \
 				   comm.c
+				   
+$(NAME)_INCLUDES := ./cJSON ./proto ./easy_setup
 
 $(NAME)_RESOURCES  := apps/smart_home/device_config.html \
                       images/brcmlogo.png \

@@ -20,6 +20,7 @@
 #include <wiced_utilities.h>
 #include <resources.h>
 #include <wiced_framework.h>
+#include "smart_home.h"
 #include "smart_home_dct.h"
 #include "comm.h"
 #include "device_config_content.h"
@@ -35,13 +36,12 @@
 #define SCRIPT_JSON_BEGIN	"var jsonObj = { "
 #define SCRIPT_JSON_PT1		"\n ap_ssid: \""
 #define SCRIPT_JSON_PT2		"\",\n ap_passwd: \""
-#define SCRIPT_JSON_PT3		"\",\n hidden_ssid: "
+#define SCRIPT_JSON_PT3		"\",\n dev_id: \""
 
-#define SCRIPT_JSON_PT6		",\n sta_ssid: \""
+#define SCRIPT_JSON_PT6		"\",\n sta_ssid: \""
 #define SCRIPT_JSON_PT7		"\",\n sta_passwd: \""
 
 #define SCRIPT_JSON_PT4		"\",\n dev_type: \""
-#define SCRIPT_JSON_PT5		"\",\n dev_index: \""
 #define SCRIPT_JSON_PT8		"\",\n dev_name: \""
 #define SCRIPT_JSON_END		"\"\n };"
 
@@ -99,6 +99,17 @@ extern wiced_http_server_t*         http_server;
 /******************************************************
  *               Function Definitions
  ******************************************************/
+static void init_device_id(dev_id_t dev_id)
+{
+	wiced_mac_t mac;
+	
+	wwd_wifi_get_mac_address( &mac, WWD_STA_INTERFACE );
+
+	memset(dev_id, 0, sizeof(dev_id_t));
+
+	sprintf(dev_id, "%02x%02x%02x%02x%02x%02x", \
+		mac.octet[0], mac.octet[1], mac.octet[2], mac.octet[3], mac.octet[4], mac.octet[5]);
+}
 
 static int32_t process_app_settings_page( const char* url_parameters, wiced_tcp_stream_t* stream, void* arg, wiced_http_message_body_t* http_message_body )
 {
@@ -106,10 +117,13 @@ static int32_t process_app_settings_page( const char* url_parameters, wiced_tcp_
     uint8_t               string_size;
     platform_dct_wifi_config_t* dct_wifi_config          = NULL;
     smart_home_app_dct_t*   dct_app                  = NULL;
+	dev_id_t dev_id;
 
     UNUSED_PARAMETER( url_parameters );
     UNUSED_PARAMETER( arg );
     UNUSED_PARAMETER( http_message_body );
+
+	init_device_id(dev_id);
 
     wiced_tcp_stream_write_resource( stream, &resources_apps_DIR_smart_home_DIR_device_config_html );
 
@@ -126,12 +140,7 @@ static int32_t process_app_settings_page( const char* url_parameters, wiced_tcp_
 	wiced_tcp_stream_write( stream, dct_wifi_config->soft_ap_settings.security_key, (uint16_t) dct_wifi_config->soft_ap_settings.security_key_length);
 
 	wiced_tcp_stream_write( stream, SCRIPT_JSON_PT3, sizeof(SCRIPT_JSON_PT3)-1 );
-#if 0
-	if(dct_wifi_config->soft_ap_settings.ssid_hide == WICED_TRUE)
-		wiced_tcp_stream_write( stream, "true", 4 );
-	else
-#endif
-		wiced_tcp_stream_write( stream, "false", 5 );
+    wiced_tcp_stream_write( stream, dev_id, (uint16_t) strlen(dev_id));
 
 	wiced_tcp_stream_write( stream, SCRIPT_JSON_PT6, sizeof(SCRIPT_JSON_PT6)-1 );
     wiced_tcp_stream_write( stream, dct_wifi_config->stored_ap_list[0].details.SSID.value, (uint16_t) dct_wifi_config->stored_ap_list[0].details.SSID.length);
@@ -146,11 +155,6 @@ static int32_t process_app_settings_page( const char* url_parameters, wiced_tcp_
 	wiced_dct_read_lock( (void**) &dct_app, WICED_TRUE, DCT_APP_SECTION, 0, sizeof( *dct_app ) );
 	memset(temp_buf, ' ', 3);
     string_size = unsigned_to_decimal_string(dct_app->dev_type, (char*)temp_buf, 1, 3);
-    wiced_tcp_stream_write(stream, temp_buf, (uint16_t) string_size);
-	
-	wiced_tcp_stream_write( stream, SCRIPT_JSON_PT5, sizeof(SCRIPT_JSON_PT5)-1 );
-	
-    string_size = unsigned_to_decimal_string(dct_app->dev_index, (char*)temp_buf, 1, 3);
     wiced_tcp_stream_write(stream, temp_buf, (uint16_t) string_size);
 
 	wiced_tcp_stream_write( stream, SCRIPT_JSON_PT8, sizeof(SCRIPT_JSON_PT8)-1 );
@@ -185,12 +189,6 @@ static int32_t process_config_save( const char* url_parameters, wiced_tcp_stream
 		dct_app->dev_type = (uint8_t)tmp_value;
 		//this_dev.dev_type = dct_app->dev_type;
 	}
-
-	res = url_para_get_int(url_parameters, "dev_index", &tmp_value);
-	if(res == 0) {
-		dct_app->dev_index = (uint8_t)tmp_value;
-		//this_dev.dev_index = dct_app->dev_index;
-	}
 	
 	res = url_para_get_str(url_parameters, "dev_name", tmp_buf, sizeof(tmp_buf));
 	if(res == 0) {
@@ -220,12 +218,7 @@ static int32_t process_config_save( const char* url_parameters, wiced_tcp_stream
 		memcpy(dct_wifi_config->soft_ap_settings.security_key, tmp_buf, strlen(tmp_buf) + 1);
 		dct_wifi_config->soft_ap_settings.security_key_length = strlen(tmp_buf);
 	}
-#if 0
-	res = url_para_get_int(url_parameters, "hidden_ssid", &tmp_value);
-	if(res == 0) {
-		dct_wifi_config->soft_ap_settings.ssid_hide= (uint8_t)tmp_value;
-	}
-#endif
+
 	res = url_para_get_str(url_parameters, "sta_ssid", tmp_buf, sizeof(tmp_buf));
 	if(res == 0) {
 		memcpy(dct_wifi_config->stored_ap_list[0].details.SSID.value, tmp_buf, strlen(tmp_buf) + 1);
