@@ -20,8 +20,8 @@
 #include <wiced_utilities.h>
 #include <resources.h>
 #include <wiced_framework.h>
-#include "smart_home.h"
-#include "smart_home_dct.h"
+#include "smart_panel.h"
+#include "smart_panel_dct.h"
 #include "comm.h"
 #include "device_config_content.h"
 
@@ -47,7 +47,7 @@
 
 #define CAPTIVE_PORTAL_REDIRECT_PAGE \
     "<html><head>" \
-    "<meta http-equiv=\"refresh\" content=\"0; url=/apps/smart_home/device_config.html\">" \
+    "<meta http-equiv=\"refresh\" content=\"0; url=/apps/smart_panel/device_config.html\">" \
     "</head></html>"
 
 /******************************************************
@@ -116,7 +116,7 @@ static int32_t process_app_settings_page( const char* url_parameters, wiced_tcp_
     char                  temp_buf[11];
     uint8_t               string_size;
     platform_dct_wifi_config_t* dct_wifi_config          = NULL;
-    smart_home_app_dct_t*   dct_app                  = NULL;
+    smart_panel_app_dct_t*   dct_app                  = NULL;
 	dev_id_t dev_id;
 
     UNUSED_PARAMETER( url_parameters );
@@ -125,7 +125,7 @@ static int32_t process_app_settings_page( const char* url_parameters, wiced_tcp_
 
 	init_device_id(dev_id);
 
-    wiced_tcp_stream_write_resource( stream, &resources_apps_DIR_smart_home_DIR_device_config_html );
+    wiced_tcp_stream_write_resource( stream, &resources_apps_DIR_smart_panel_DIR_device_config_html );
 
     /* Output javascript to fill the table entry */
 	
@@ -164,7 +164,7 @@ static int32_t process_app_settings_page( const char* url_parameters, wiced_tcp_
 	
 	wiced_tcp_stream_write( stream, SCRIPT_JSON_END, sizeof(SCRIPT_JSON_END)-1 );
 
-    wiced_tcp_stream_write_resource( stream, &resources_apps_DIR_smart_home_DIR_device_config_html_dev_settings_bottom );
+    wiced_tcp_stream_write_resource( stream, &resources_apps_DIR_smart_panel_DIR_device_config_html_dev_settings_bottom );
 
     return 0;
 }
@@ -174,7 +174,7 @@ static int32_t process_config_save( const char* url_parameters, wiced_tcp_stream
     UNUSED_PARAMETER( arg );
     UNUSED_PARAMETER( http_message_body );
 	platform_dct_wifi_config_t* dct_wifi_config = NULL;
-    smart_home_app_dct_t*   dct_app = NULL;
+    smart_panel_app_dct_t*   dct_app = NULL;
 	char tmp_buf[256];
 	int tmp_value;
 	int res;
@@ -198,7 +198,7 @@ static int32_t process_config_save( const char* url_parameters, wiced_tcp_stream
 	
 	dct_app->device_configured = WICED_TRUE;
 
-    wiced_dct_write( (const void*) dct_app, DCT_APP_SECTION, 0, sizeof(smart_home_app_dct_t) );
+    wiced_dct_write( (const void*) dct_app, DCT_APP_SECTION, 0, sizeof(smart_panel_app_dct_t) );
 
     /* release the read lock */
     wiced_dct_read_unlock( dct_app, WICED_TRUE );

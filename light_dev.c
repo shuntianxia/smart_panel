@@ -13,7 +13,7 @@
  */
 #include "wiced.h"
 #include "light_dev.h"
-#include "smart_home_dct.h"
+#include "smart_panel_dct.h"
 #include "wiced_time.h"
 #include "wiced_rtos.h"
 #include "wiced_utilities.h"
@@ -81,7 +81,7 @@ static light_t light_list[] =
  ******************************************************/
 wiced_result_t light_dev_init(light_dev_t **light_dev_arg, wiced_worker_thread_t* thread, light_handler_t function)
 {
-	smart_home_app_dct_t*   dct_app;
+	smart_panel_app_dct_t*   dct_app;
 	light_dev_t *light_dev;
 	uint8_t light_status;
 	int i;

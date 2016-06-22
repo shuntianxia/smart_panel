@@ -17,7 +17,7 @@
 #include "wiced_rtos.h"
 #include "wiced_utilities.h"
 #include "wwd_constants.h"
-#include "smart_home_dct.h"
+#include "smart_panel_dct.h"
 #include "math.h"
 
 /******************************************************
@@ -72,7 +72,7 @@ static uint32_t motor_state;
 #if 0
 curtain_t * curtain_init_bak(wiced_worker_thread_t* thread, uart_keypad_handler_t function)
 {
-	smart_home_app_dct_t*   dct_app;
+	smart_panel_app_dct_t*   dct_app;
 	curtain_t *curtain;
 
 	curtain = (curtain_t *) malloc_named("curtain", sizeof(curtain_t));
@@ -96,7 +96,7 @@ curtain_t * curtain_init_bak(wiced_worker_thread_t* thread, uart_keypad_handler_
 #endif
 wiced_result_t curtain_init(curtain_t **curtain_dev, wiced_worker_thread_t* thread, curtain_handler_t function)
 {
-	smart_home_app_dct_t*   dct_app;
+	smart_panel_app_dct_t*   dct_app;
 	curtain_t *curtain;
 
 	curtain = (curtain_t *) malloc_named("curtain", sizeof(curtain_t));
@@ -218,7 +218,7 @@ void curtain_cali_start(curtain_t *curtain)
 
 void curtain_cali_done(curtain_t *curtain)
 {
-	smart_home_app_dct_t*   dct_app;
+	smart_panel_app_dct_t*   dct_app;
 	uint32_t current_time;
 
 	if(curtain->current_state == CURTAIN_STATE_CALIBRATING) {
@@ -236,7 +236,7 @@ void curtain_cali_done(curtain_t *curtain)
 		dct_app->specific.curtain_config.calibrated= curtain->calibrated;
 		dct_app->specific.curtain_config.current_pos_ms= curtain->current_pos_ms;
 		dct_app->specific.curtain_config.full_pos_ms= curtain->full_pos_ms;
-		wiced_dct_write( (const void*) dct_app, DCT_APP_SECTION, 0, sizeof(smart_home_app_dct_t) );
+		wiced_dct_write( (const void*) dct_app, DCT_APP_SECTION, 0, sizeof(smart_panel_app_dct_t) );
 		wiced_dct_read_unlock( dct_app, WICED_TRUE );
 	}
 	return;
@@ -380,7 +380,7 @@ static wiced_result_t set_pos_stop_event_handler( void* arg )
 #if 0
 static wiced_result_t set_pos_stop_event_handler_bak( void* arg )
 {
-	smart_home_app_dct_t*   dct_app;
+	smart_panel_app_dct_t*   dct_app;
 	curtain_t *curtain = (curtain_t *)arg;
 	uint32_t current_time;
 	uint32_t time_ms;

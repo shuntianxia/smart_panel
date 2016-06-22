@@ -17,7 +17,7 @@
 #include "wiced_rtos.h"
 #include "wiced_utilities.h"
 #include "wwd_constants.h"
-#include "smart_home.h"
+#include "smart_panel.h"
 
 /******************************************************
  *                      Macros
