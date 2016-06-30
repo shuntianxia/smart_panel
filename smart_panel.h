@@ -12,6 +12,7 @@
 #include "light_dev.h"
 #include "curtain_dev.h"
 #include "list.h"
+#include "smart_panel_dct.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,6 +70,26 @@ typedef struct {
 	dev_id_t dev_id;
 }dev_info_t;
 
+typedef enum {
+	DATA_IDLE = 0x0,
+	DATA_READY = 0x1
+} uart_data_state;
+
+typedef struct {
+	uint8_t msg_buf[256];
+	uint8_t pos;
+	uint8_t data_len;
+	uart_data_state state;
+} uart_data_info;
+
+typedef enum {
+	HEAD_SECTION,
+	FIRST_FLAG_CR,
+	SECOND_FLAG_LN,
+	THIRD_FLAG_CR,
+	FOURTH_FLAG_LN,
+}frame_state_t;
+
 typedef struct {
 	wiced_bool_t configured;
 	//uint8_t dev_index;
@@ -94,6 +115,8 @@ typedef struct {
 		light_dev_t *light_dev;
 		curtain_t *curtain;
 	} specific;
+	smart_panel_app_dct_t app_dct;
+	platform_dct_wifi_config_t wifi_dct;
 } glob_info_t;
 /******************************************************
  *                 Global Variables

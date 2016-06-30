@@ -3,7 +3,6 @@
 #include "smart_panel.h"
 #include "smart_panel_dct.h"
 #include "list.h"
-#include "uart_interface.h"
 #include "uart_keypad.h"
 #include "light_dev.h"
 #include "curtain_dev.h"
@@ -23,18 +22,19 @@
 #define PORTNUM                (50007)           /* UDP port */
 #define USER_PORT              (8088)           /* UDP port */
 #define SEND_UDP_RESPONSE
-#define E200_UART WICED_UART_2
-#define RX_BUFFER_SIZE    1024
+#define RX_BUFFER_SIZE    256
 #define UART_QUEUE_DEPTH	5
 #define UART_RECEIVE_THREAD_STACK_SIZE      5*1024
 #define UART_SEND_THREAD_STACK_SIZE    5*1024
+//#define DEBUG_UART_RECEIVE
 
 #define TCP_CONNECTION_NUMBER_OF_RETRIES  3
 #define UART_FRAME_INTERVAL	5
 #define UART_FRAME_TIMEOUT	(UART_FRAME_INTERVAL/2)
+#define E200_UART WICED_UART_2
 
 //#define PRE_DEV_IP_ADDRESS MAKE_IPV4_ADDRESS(192,168,0,1)
-#define UDP_BROADCAST_ADDR MAKE_IPV4_ADDRESS(192,168,1,255)
+//#define UDP_BROADCAST_ADDR MAKE_IPV4_ADDRESS(192,168,0,255)
 
 
 /******************************************************
@@ -62,7 +62,7 @@ static void report_light_status(void *arg);
 /******************************************************
  *               Variable Definitions
  ******************************************************/
-wiced_uart_config_t uart_config =
+static wiced_uart_config_t uart_config =
 {
     .baud_rate    = 9600,
     .data_width   = DATA_WIDTH_8BIT,
@@ -100,7 +100,7 @@ static const wiced_ip_setting_t ap_ip_settings =
 	INITIALISER_IPV4_ADDRESS( .gateway,    MAKE_IPV4_ADDRESS( 192,168,	1,	1 ) ),
 };
 
-wiced_ip_address_t INITIALISER_IPV4_ADDRESS( udp_broadcast_addr, UDP_BROADCAST_ADDR );
+//wiced_ip_address_t INITIALISER_IPV4_ADDRESS( udp_broadcast_addr, UDP_BROADCAST_ADDR );
 
 static wiced_timed_event_t sta_conn_check_event;
 static wiced_timed_event_t test_event;
@@ -114,6 +114,15 @@ static int alive_timeout = 0;
 /******************************************************
  *               Function Definitions
  ******************************************************/
+static inline void print_ip_address(wiced_ip_address_t *ip_addr)
+{
+	WPRINT_APP_INFO (("%u.%u.%u.%u\n", (unsigned char) ( ( GET_IPV4_ADDRESS(*ip_addr) >> 24 ) & 0xff ),
+										(unsigned char) ( ( GET_IPV4_ADDRESS(*ip_addr) >> 16 ) & 0xff ),
+										(unsigned char) ( ( GET_IPV4_ADDRESS(*ip_addr) >>  8 ) & 0xff ),
+										(unsigned char) ( ( GET_IPV4_ADDRESS(*ip_addr) >>  0 ) & 0xff )
+										 ));
+}
+
 #if 0
 static wiced_result_t tcp_connect_callback( void* socket)
 {
@@ -294,6 +303,7 @@ static void uart_send_data_frame(cJSON *json, wiced_uart_t uart)
 		uart_frame->len = strlen(uart_frame->data);
 	}
 	wiced_uart_transmit_bytes( uart, uart_frame->data, uart_frame->len);
+	WPRINT_APP_INFO(("send to uart\n %s", uart_frame->data));
 	free(uart_frame);
 	free(out);
 }
@@ -336,6 +346,7 @@ wiced_result_t send_udp_packet(wiced_udp_socket_t* socket, const wiced_ip_addres
 static void udp_send_data_frame(cJSON *json, wiced_udp_socket_t* socket, const wiced_ip_address_t* ip_addr, const uint16_t udp_port)
 {
 	char *out = cJSON_Print(json);
+#if 0
 	uart_frame_t *uart_frame = malloc(sizeof(uart_frame_t));
 	if(uart_frame != NULL) {
 		memset(uart_frame, 0, sizeof(uart_frame_t));
@@ -344,6 +355,12 @@ static void udp_send_data_frame(cJSON *json, wiced_udp_socket_t* socket, const w
 	}
 	send_udp_packet(socket, ip_addr, udp_port, uart_frame->data, uart_frame->len);
 	free(uart_frame);
+#else
+	WPRINT_APP_INFO(("target ip is :"));
+	print_ip_address(ip_addr);
+	WPRINT_APP_INFO(("%s\n", out));
+	send_udp_packet(socket, ip_addr, udp_port, out, strlen(out));
+#endif
 	free(out);
 }
 
@@ -412,6 +429,7 @@ static dev_info_t *find_dev_by_id(dev_id_t dev_id)
     dev_info_t *pos;
     list_for_each_entry(pos, &dev_list, list) {
         if (dev_id_equal(dev_id, pos->dev_id)) {
+			WPRINT_APP_INFO(("find device success\n"));
             return pos;
         }
     }
@@ -433,12 +451,16 @@ static wiced_result_t add_dev_to_list(dev_id_t dev_id, const wiced_ip_address_t*
 	if(dev == NULL) {
 		dev = malloc(sizeof(dev_info_t));
 		if(dev != NULL) {
+			//dev->dev_id = dev_id;
+			memcpy(dev->dev_id, dev_id, sizeof(dev_id_t));
 			list_add_tail(&dev->list, &dev_list);
 		} else {
 			return WICED_ERROR;
 		}
 	}
 	dev->dev_ip = *ip_addr;
+	WPRINT_APP_INFO(("dev_id is %s, dev_ip is ", dev->dev_id));
+	print_ip_address(&dev->dev_ip);
 	return WICED_SUCCESS;
 }
 
@@ -458,10 +480,23 @@ static wiced_result_t parse_device_id(cJSON *root)
 	return WICED_ERROR;
 }
 
+static void response_control_panel(dev_id_t dev_id, char *dev_type, int key_code, int key_status)
+{
+	cJSON *root;
+
+	root = cJSON_CreateObject();
+	cJSON_AddStringToObject(root, "dev_id", dev_id);
+	cJSON_AddStringToObject(root, "dev_type", dev_type);
+	cJSON_AddNumberToObject(root, "key_code", key_code);
+	cJSON_AddNumberToObject(root, "key_status", key_status);
+	uart_send_data_frame(root, E200_UART);
+	cJSON_Delete(root);
+}
+
 wiced_result_t master_parse_udp_msg (void *socket, const wiced_ip_address_t* ip_addr, const uint16_t udp_port, char* buffer, uint16_t buffer_length)
 {
-	cJSON *root, *method, *request, *response, *slave_id, *client_type;
-	int i, array_size;
+	cJSON *root, *method, *params, *request, *response, *slave_id, *client_type, *light, *dev_id, *chan;
+	int i, array_size, key_code, key_status;
 	char *out;
 	int result;
 
@@ -476,52 +511,78 @@ wiced_result_t master_parse_udp_msg (void *socket, const wiced_ip_address_t* ip_
 		printf("no method\n");
 		return WICED_ERROR;
 	}
-	if( method->type == cJSON_String ) {
-		if(strcmp(method->valuestring, "discover_master") == 0) {
-			request = cJSON_GetObjectItem( root , "request");
-			if(!request) {
-				printf("no request\n");
-				return WICED_ERROR;
+	if(strcmp(method->valuestring, "discover_master") == 0) {
+		WPRINT_APP_INFO(("discover_master\n"));
+		request = cJSON_GetObjectItem( root , "request");
+		if(!request) {
+			printf("no request\n");
+			cJSON_Delete(root);
+			return WICED_ERROR;
+		}
+		slave_id = cJSON_GetObjectItem( request , "slave_id");
+		if(!slave_id) {
+			printf("no slave_id\n");
+			cJSON_Delete(root);
+			return WICED_ERROR;
+		}
+		add_dev_to_list(slave_id->valuestring, ip_addr);
+		discover_master_response(socket, ip_addr, udp_port);
+	} else if(strcmp(method->valuestring, "discover_slave") == 0) {
+		WPRINT_APP_INFO(("discover_slave\n"));
+		response = cJSON_GetObjectItem( root , "response");
+		if(!response) {
+			printf("no response\n");
+			cJSON_Delete(root);
+			return WICED_ERROR;
+		}
+		slave_id = cJSON_GetObjectItem( response , "slave_id");
+		if(!slave_id) {
+			printf("no slave_id\n");
+			cJSON_Delete(root);
+			return WICED_ERROR;
+		}
+		add_dev_to_list(slave_id->valuestring, ip_addr);
+	} else if(strcmp(method->valuestring, "report_device_status") == 0) {
+		WPRINT_APP_INFO(("report_device_status\n"));
+		dev_id = cJSON_GetObjectItem( root , "device_id");
+		params = cJSON_GetObjectItem( root , "params");
+		light = cJSON_GetObjectItem( params , "light");
+		if(light != NULL) {
+			if((chan = cJSON_GetObjectItem( light, "chan1"))) {
+				response_control_panel(dev_id->valuestring, "light", 1, chan->valueint);
 			}
-			slave_id = cJSON_GetObjectItem( request , "slave_id");
-			if(!slave_id) {
-				printf("no slave_id\n");
-				return WICED_ERROR;
+			if((chan = cJSON_GetObjectItem( light, "chan2"))) {
+				response_control_panel(dev_id->valuestring, "light", 2, chan->valueint);
 			}
-			add_dev_to_list(slave_id->valuestring, ip_addr);
-			discover_master_response(socket, ip_addr, udp_port);
-		} else if(strcmp(method->valuestring, "discover_slave") == 0) {
-			response = cJSON_GetObjectItem( root , "response");
-			if(!response) {
-				printf("no response\n");
-				return WICED_ERROR;
+			if((chan = cJSON_GetObjectItem( light, "chan3"))) {
+				response_control_panel(dev_id->valuestring, "light", 3, chan->valueint);
 			}
-			slave_id = cJSON_GetObjectItem( request , "slave_id");
-			if(!slave_id) {
-				printf("no slave_id\n");
-				return WICED_ERROR;
+			if((chan = cJSON_GetObjectItem( light, "chan4"))) {
+				response_control_panel(dev_id->valuestring, "light", 4, chan->valueint);
 			}
-			add_dev_to_list(slave_id->valuestring, ip_addr);
-		} else {
-			request = cJSON_GetObjectItem( root , "request");
-			if(!request) {
-				printf("no request\n");
-				return WICED_ERROR;
-			}
-			client_type = cJSON_GetObjectItem( request , "client_type");
-			if(!client_type) {
-				printf("no client_type\n");
-				return WICED_ERROR;
-			}
-			if(strcmp(client_type->valuestring, "control_pannel") == 0) {
-				WPRINT_APP_INFO(("forward to control panel\n"));
-				cJSON_DeleteItemFromObject(root, "request");
-				uart_send_data_frame(root, E200_UART);
-			} else if(strcmp(client_type->valuestring, "local_user") == 0) {
-				WPRINT_APP_INFO(("forward to local user\n"));
-			} else if(strcmp(client_type->valuestring, "remote_user") == 0) {
-				WPRINT_APP_INFO(("forward to remote user\n"));
-			}
+		}
+		//response_local_user();
+		//response_remote_user();
+	} else {
+		WPRINT_APP_INFO(("other method\n"));
+		request = cJSON_GetObjectItem( root , "request");
+		if(!request) {
+			printf("no request\n");
+			return WICED_ERROR;
+		}
+		client_type = cJSON_GetObjectItem( request , "client_type");
+		if(!client_type) {
+			printf("no client_type\n");
+			return WICED_ERROR;
+		}
+		if(strcmp(client_type->valuestring, "control_panel") == 0) {
+			WPRINT_APP_INFO(("forward to control panel\n"));
+			//cJSON_DeleteItemFromObject(root, "request");
+			//uart_send_data_frame(root, E200_UART);
+		} else if(strcmp(client_type->valuestring, "local_user") == 0) {
+			WPRINT_APP_INFO(("forward to local user\n"));
+		} else if(strcmp(client_type->valuestring, "remote_user") == 0) {
+			WPRINT_APP_INFO(("forward to remote user\n"));
 		}
 	}
 	cJSON_Delete(root);
@@ -545,6 +606,7 @@ wiced_result_t slave_parse_udp_msg(void *socket, const wiced_ip_address_t* ip_ad
 		printf("no method\n");
 		return WICED_ERROR;
 	}
+	WPRINT_APP_INFO(("%s\n", method->valuestring));
 	if(strcmp(method->valuestring, "discover_slave") == 0) {
 		request = cJSON_GetObjectItem( root , "request");
 		if(!request) {
@@ -564,7 +626,7 @@ wiced_result_t slave_parse_udp_msg(void *socket, const wiced_ip_address_t* ip_ad
 			printf("no response\n");
 			return WICED_ERROR;
 		}
-		master_id = cJSON_GetObjectItem( request , "master_id");
+		master_id = cJSON_GetObjectItem( response , "master_id");
 		if(!master_id) {
 			printf("no master_id\n");
 			return WICED_ERROR;
@@ -642,6 +704,7 @@ static wiced_result_t udp_receive_callback(void *socket)
 	static wiced_ip_address_t udp_src_ip_addr;
 	static uint16_t 		  udp_src_port;
 
+	WPRINT_APP_INFO(("udp_receive_callback\n"));
 	/* Wait for UDP packet */
 	wiced_result_t result = wiced_udp_receive( socket, &packet, RX_WAIT_TIMEOUT );
 
@@ -686,9 +749,9 @@ static void udp_client_enable()
 	wiced_udp_register_callbacks(&glob_info.udp_socket, udp_receive_callback);
 
 	if(glob_info.dev_type == DEV_TYPE_MASTER) {
-		discover_slave_request(&glob_info.udp_socket, &udp_broadcast_addr, PORTNUM);
+		discover_slave_request(&glob_info.udp_socket, WICED_IP_BROADCAST, PORTNUM);
 	} else {
-		discover_master_request(&glob_info.udp_socket, &udp_broadcast_addr, PORTNUM);
+		discover_master_request(&glob_info.udp_socket, WICED_IP_BROADCAST, PORTNUM);
 	}
 }
 
@@ -745,37 +808,118 @@ wiced_result_t client_enable()
 #endif
 }
 
-wiced_result_t master_parse_uart_msg(char *buffer, uint32_t length)
+static void send_control_data(dev_id_t dev_id, char *dev_type, int key_code, int key_status, char *bin_data)
 {
-	cJSON *root, *method, *params, *request, *response, *item, *device_id, *json_send = NULL;
-	int result;
+	cJSON *root, *request, *params, *light, *curtain;
+	char *out;
+	int position;
+	char chan_str[6];
 	wiced_ip_address_t *target_ip;
 
+	root = cJSON_CreateObject();
+	cJSON_AddStringToObject(root, "method", "set_device_status");
+	cJSON_AddStringToObject(root, "device_id", dev_id);
+	cJSON_AddItemToObject(root, "params", params = cJSON_CreateObject());
+#ifdef TRANSFER_BIN_DATA
+	if(bin_data != NULL) {
+		cJSON_AddStringToObject(root, "bin_data", bin_data);
+	}
+#endif
+	if(strcmp(dev_type, "light") == 0) {
+		cJSON_AddItemToObject(params, "light", light = cJSON_CreateObject());
+		memset(chan_str, 0, sizeof(chan_str));
+		sprintf(chan_str, "chan%d", key_code);
+		cJSON_AddNumberToObject(light, chan_str, key_status);
+	} else if(strcmp(dev_type, "curtain") == 0) {
+		cJSON_AddItemToObject(params, "curtain", curtain = cJSON_CreateObject());		
+		cJSON_AddNumberToObject(curtain, "position", key_code);
+	}
+	cJSON_AddItemToObject(root, "request", request = cJSON_CreateObject());
+	cJSON_AddStringToObject(request, "client_type", "control_panel");
+#if 1
+	if(dev_id_equal(dev_id, broadcast_id)) {
+		target_ip = WICED_IP_BROADCAST;
+	} else {
+		target_ip = find_target_ip(dev_id);
+	}
+	if(target_ip != NULL) {
+		udp_send_data_frame(root, &glob_info.udp_socket, target_ip, PORTNUM);
+	} else {
+		discover_slave_request(&glob_info.udp_socket, WICED_IP_BROADCAST, PORTNUM);
+	}
+#else
+	udp_send_data_frame(root, &glob_info.udp_socket, WICED_IP_BROADCAST, PORTNUM);
+#endif
+	cJSON_Delete(root);
+}
+
+wiced_result_t master_parse_uart_msg(char *buffer, uint32_t length)
+{
+	cJSON *root, *dev_id, *dev_type, *key_code, *key_status, *bin_data;
+	
     root = cJSON_Parse(buffer);
     if (!root) {  
         printf("Error before: [%s]\n",cJSON_GetErrorPtr());
 		return WICED_ERROR;
     }
-	cJSON_AddItemToObject(root, "request", request = cJSON_CreateObject());
-	cJSON_AddStringToObject(request, "client_type", "control_pannel");
-	
-    device_id = cJSON_GetObjectItem( root , "device_id");
-	if(!device_id) {
-		printf("no device_id\n");
+    dev_id = cJSON_GetObjectItem( root , "dev_id");
+	if(!dev_id) {
+		printf("no dev_id\n");
 		return WICED_ERROR;
 	}
-	if(dev_id_equal(device_id->valuestring, broadcast_id)) {
-		target_ip = &udp_broadcast_addr;
-	} else {
-		target_ip = find_target_ip(device_id->valuestring);
-	}
-	if(target_ip != NULL) {
-		udp_send_data_frame(root, &glob_info.udp_socket, target_ip, PORTNUM);
-	} else {
-		discover_slave_request(&glob_info.udp_socket, &udp_broadcast_addr, PORTNUM);
-	}
+	dev_type = cJSON_GetObjectItem( root , "dev_type");
+	key_code = cJSON_GetObjectItem( root , "key_code");
+	key_status = cJSON_GetObjectItem( root , "key_status");
+	bin_data = cJSON_GetObjectItem( root , "bin_data");
+	WPRINT_APP_INFO(("dev_id = %s, dev_type = %s\n", dev_id->valuestring, dev_type->valuestring));
+	send_control_data(dev_id->valuestring, dev_type->valuestring, \
+		key_code->valueint, key_status->valueint, bin_data->valuestring);
     cJSON_Delete(root);
     return WICED_SUCCESS;
+}
+
+void uart_receive_handler_new(uint32_t arg)
+{
+	char c;
+	wiced_result_t result;
+	frame_state_t state = HEAD_SECTION;
+	char recv_buf[512];
+	unsigned int recv_len = 0;
+	
+	while(1)
+	{
+		if(state != FOURTH_FLAG_LN) {
+			result = wiced_uart_receive_bytes( E200_UART, &c, 1, UART_FRAME_TIMEOUT);
+			if(result != WICED_SUCCESS) {
+				continue;
+			}
+#ifdef DEBUG_UART_RECEIVE
+			WPRINT_APP_INFO(("%c", c));
+#endif
+			recv_buf[recv_len++] = c;
+			if(c == '\r') {
+				if(state == HEAD_SECTION) {
+					state = FIRST_FLAG_CR;
+				} else if(state == SECOND_FLAG_LN) {
+					state = THIRD_FLAG_CR;
+				}
+			} else if(c == '\n') {
+				if(state == FIRST_FLAG_CR) {
+					state = SECOND_FLAG_LN;
+				} else if(state == THIRD_FLAG_CR) {
+					state = FOURTH_FLAG_LN;
+				}
+			} else {
+				state = HEAD_SECTION;
+			}
+		} else {
+			state = HEAD_SECTION;
+			recv_buf[recv_len] = '\0';
+			master_parse_uart_msg(recv_buf, recv_len);
+			recv_len = 0;
+			memset(recv_buf, 0, sizeof(recv_buf));
+		}
+	}
 }
 
 void uart_receive_handler(uint32_t arg)
@@ -797,6 +941,7 @@ void uart_receive_handler(uint32_t arg)
 			uart_msg.msg_buf[uart_msg.pos++] = c;
 			if(c == '\n' && uart_msg.pos >= 6) {
 				if(strncmp((char*)&uart_msg.msg_buf[uart_msg.pos - 4], "\r\n\r\n", 4) == 0) {
+					WPRINT_APP_INFO(("uart_msg.pos = %d\n", uart_msg.pos));
 					master_parse_uart_msg((char*)uart_msg.msg_buf, uart_msg.pos);
 					uart_msg.pos = 0;
 					continue;
@@ -833,7 +978,7 @@ wiced_result_t uart_transceiver_enable()
 
 	WICED_VERIFY( wiced_rtos_init_queue( &glob_info.uart_send_queue, NULL, sizeof(uart_frame_t *), UART_QUEUE_DEPTH ) );
 	WPRINT_APP_INFO(("create uart receive thread\n"));
-	wiced_rtos_create_thread(&glob_info.uart_recv_thread, WICED_APPLICATION_PRIORITY, "uart receive thread", uart_receive_handler, UART_RECEIVE_THREAD_STACK_SIZE, 0);
+	wiced_rtos_create_thread(&glob_info.uart_recv_thread, WICED_APPLICATION_PRIORITY, "uart receive thread", uart_receive_handler_new, UART_RECEIVE_THREAD_STACK_SIZE, 0);
 	WPRINT_APP_INFO(("create uart send thread\n"));
 	wiced_rtos_create_thread(&glob_info.uart_send_thread, WICED_APPLICATION_PRIORITY, "uart send thread", uart_send_handler, UART_SEND_THREAD_STACK_SIZE, 0);
 	return WICED_SUCCESS;
@@ -904,7 +1049,7 @@ static void get_device_status(wiced_udp_socket_t* socket, const wiced_ip_address
 		cJSON_AddNumberToObject(light, "chan3", get_light_status(3));
 		cJSON_AddNumberToObject(light, "chan4", get_light_status(4));
 	} else if(glob_info.dev_type == DEV_TYPE_CURTAIN) {
-		cJSON_AddItemToObject(params, "curtain", light = cJSON_CreateObject());
+		cJSON_AddItemToObject(params, "curtain", curtain = cJSON_CreateObject());
 		cJSON_AddNumberToObject(curtain, "position", get_curtain_pos(curtain));
 		//cJSON_AddNumberToObject(light, "cur_state", get_curtain_state());
 	}
@@ -928,30 +1073,54 @@ static void report_device_status(void *arg)
 		cJSON_AddNumberToObject(light, "chan3", get_light_status(3));
 		cJSON_AddNumberToObject(light, "chan4", get_light_status(4));
 	} else if(glob_info.dev_type == DEV_TYPE_CURTAIN) {
-		cJSON_AddItemToObject(params, "curtain", light = cJSON_CreateObject());
+		cJSON_AddItemToObject(params, "curtain", curtain = cJSON_CreateObject());
 		cJSON_AddNumberToObject(curtain, "position", get_curtain_pos(curtain));
 		//cJSON_AddNumberToObject(light, "cur_state", get_curtain_state());
 	}
-	udp_send_data_frame(root, &glob_info.udp_socket, &udp_broadcast_addr, PORTNUM);
+	udp_send_data_frame(root, &glob_info.udp_socket, WICED_IP_BROADCAST, PORTNUM);
 	cJSON_Delete(root);
 }
 
-static void init_device_id(dev_id_t dev_id)
+static void init_device_id()
 {
 	wiced_mac_t mac;
 	
 	wwd_wifi_get_mac_address( &mac, WWD_STA_INTERFACE );
 
-	memset(dev_id, 0, sizeof(dev_id_t));
+	memset(glob_info.dev_id, 0, sizeof(dev_id_t));
 
-	sprintf(dev_id, "%02x%02x%02x%02x%02x%02x", \
+	sprintf(glob_info.dev_id, "%02x%02x%02x%02x%02x%02x", \
 		mac.octet[0], mac.octet[1], mac.octet[2], mac.octet[3], mac.octet[4], mac.octet[5]);
+}
+
+static void init_ssid()
+{
+	char ssid[64] = {0};
+	//char passwd[64] = {0};
+	wiced_mac_t mac;
+
+	wwd_wifi_get_mac_address( &mac, WWD_STA_INTERFACE );
+	
+	sprintf(ssid, "smart_panel_%02x%02x%02x", mac.octet[3], mac.octet[4], mac.octet[5]);
+
+	load_wifi_data(&glob_info.wifi_dct);
+	memcpy(glob_info.wifi_dct.soft_ap_settings.SSID.value, ssid, strlen(ssid) + 1);
+	glob_info.wifi_dct.soft_ap_settings.SSID.length = strlen(ssid);
+	store_wifi_data(&glob_info.wifi_dct);
+	//memcpy(glob_info.wifi_dct->soft_ap_settings.security_key, passwd, strlen(passwd) + 1);
+	//glob_info.wifi_dct->soft_ap_settings.security_key_length = strlen(passwd);
 }
 
 static wiced_result_t device_init()
 {
+	wiced_mac_t mac;
 	smart_panel_app_dct_t* dct_app;
 	wiced_result_t res;
+	
+	init_device_id();
+	init_ssid();
+
+	WPRINT_APP_INFO(("device_id is %s\n", glob_info.dev_id));
 	
 	if(	wiced_dct_read_lock( (void**) &dct_app, WICED_TRUE, DCT_APP_SECTION, 0, sizeof( *dct_app ) ) != WICED_SUCCESS)
 	{
@@ -963,10 +1132,6 @@ static wiced_result_t device_init()
 	strncpy(glob_info.dev_name, dct_app->dev_name, sizeof(glob_info.dev_name));
 	WPRINT_APP_INFO(("glob_info.dev_name is %s\n", glob_info.dev_name));
 	wiced_dct_read_unlock( dct_app, WICED_TRUE );
-
-	init_device_id(glob_info.dev_id);
-
-	WPRINT_APP_INFO(("device_id is %s\n", glob_info.dev_id));
 
 	if(glob_info.configured == WICED_FALSE) {
 		return WICED_ERROR;
@@ -1006,13 +1171,10 @@ void application_start( )
     /* Initialise the device and WICED framework */
     wiced_init( );
 
+	device_init();
+	
 	/* Configure the device */
     configure_device();
 
-	if(device_init() != WICED_SUCCESS){
-		WPRINT_APP_INFO(("device_init failed\n"));
-		return;
-	}
-	
 	WPRINT_APP_INFO(("end ...\n"));
 }

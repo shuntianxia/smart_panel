@@ -95,35 +95,20 @@ START_OF_HTTP_PAGE_DATABASE(device_config_http_page_database)
 END_OF_HTTP_PAGE_DATABASE();
 
 extern wiced_http_server_t*         http_server;
-
+extern glob_info_t glob_info;
 /******************************************************
  *               Function Definitions
  ******************************************************/
-static void init_device_id(dev_id_t dev_id)
-{
-	wiced_mac_t mac;
-	
-	wwd_wifi_get_mac_address( &mac, WWD_STA_INTERFACE );
-
-	memset(dev_id, 0, sizeof(dev_id_t));
-
-	sprintf(dev_id, "%02x%02x%02x%02x%02x%02x", \
-		mac.octet[0], mac.octet[1], mac.octet[2], mac.octet[3], mac.octet[4], mac.octet[5]);
-}
-
 static int32_t process_app_settings_page( const char* url_parameters, wiced_tcp_stream_t* stream, void* arg, wiced_http_message_body_t* http_message_body )
 {
     char                  temp_buf[11];
     uint8_t               string_size;
     platform_dct_wifi_config_t* dct_wifi_config          = NULL;
     smart_panel_app_dct_t*   dct_app                  = NULL;
-	dev_id_t dev_id;
 
     UNUSED_PARAMETER( url_parameters );
     UNUSED_PARAMETER( arg );
     UNUSED_PARAMETER( http_message_body );
-
-	init_device_id(dev_id);
 
     wiced_tcp_stream_write_resource( stream, &resources_apps_DIR_smart_panel_DIR_device_config_html );
 
@@ -140,7 +125,7 @@ static int32_t process_app_settings_page( const char* url_parameters, wiced_tcp_
 	wiced_tcp_stream_write( stream, dct_wifi_config->soft_ap_settings.security_key, (uint16_t) dct_wifi_config->soft_ap_settings.security_key_length);
 
 	wiced_tcp_stream_write( stream, SCRIPT_JSON_PT3, sizeof(SCRIPT_JSON_PT3)-1 );
-    wiced_tcp_stream_write( stream, dev_id, (uint16_t) strlen(dev_id));
+    wiced_tcp_stream_write( stream, glob_info.dev_id, (uint16_t) strlen(glob_info.dev_id));
 
 	wiced_tcp_stream_write( stream, SCRIPT_JSON_PT6, sizeof(SCRIPT_JSON_PT6)-1 );
     wiced_tcp_stream_write( stream, dct_wifi_config->stored_ap_list[0].details.SSID.value, (uint16_t) dct_wifi_config->stored_ap_list[0].details.SSID.length);

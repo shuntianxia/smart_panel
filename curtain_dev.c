@@ -56,6 +56,8 @@ static void set_curtain_pos_ms(curtain_t *curtain, curtain_pos_ms_t pos_ms);
 static wiced_result_t set_pos_step1_event_handler( void* arg );
 static wiced_result_t set_pos_step2_event_handler( void* arg );
 static wiced_result_t set_pos_stop_event_handler( void* arg );
+static void set_pos_force_stop_handler(void* arg);
+static wiced_result_t set_pos_start_event_handler( void* arg );
 static void set_pos_step1_timer_handler( void* arg );
 static void set_pos_step2_timer_handler( void* arg );
 
@@ -115,6 +117,8 @@ wiced_result_t curtain_init(curtain_t **curtain_dev, wiced_worker_thread_t* thre
 	wiced_dct_read_unlock( dct_app, WICED_TRUE );
 
 	*curtain_dev = curtain;	
+	wiced_gpio_init(RELAY_GPIO_1, OUTPUT_PUSH_PULL);
+	wiced_gpio_init(RELAY_GPIO_2, OUTPUT_PUSH_PULL);
 	//WPRINT_APP_INFO(("RELAY_GPIO_3 = %d\n", wiced_gpio_output_get(RELAY_GPIO_3)));
 	//WPRINT_APP_INFO(("RELAY_GPIO_4 = %d\n", wiced_gpio_output_get(RELAY_GPIO_4)));
 	return WICED_SUCCESS;
@@ -266,21 +270,24 @@ curtain_pos_t get_curtain_pos(curtain_t *curtain)
 int set_curtain_pos(curtain_t *curtain, uint8_t ratio)
 {
 	curtain_pos_ms_t pos_ms;
-	int rs;
 
-	if(ratio < 0 || ratio > 100) {
-		rs = 1;
-	} else if(curtain->current_state != CURTAIN_STATE_NONE) {
-		rs = 2;
-	} else if(curtain->calibrated != WICED_TRUE) {
+	if(ratio > 0x64 && ratio != 0xff) {
+		return 1;
+	} 
+	if(ratio <= 0x64 && curtain->current_state != CURTAIN_STATE_NONE) {
+		return 2;
+	} 
+	if(curtain->calibrated != WICED_TRUE) {
 		WPRINT_APP_INFO(("please calibrate first\n"));
-		rs = 3;
-	} else {
+		return 3;
+	}
+	if(ratio == 0xff && curtain->current_state == CURTAIN_STATE_PROGRAMMING) {
+		set_pos_force_stop_handler(curtain);
+	} else if(ratio <= 0x64 && curtain->current_state == CURTAIN_STATE_NONE) {
 		pos_ms = (ratio * curtain->full_pos_ms)/100;
 		set_curtain_pos_ms(curtain, pos_ms);
-		rs = 0;
 	}
-	return rs;
+	return 0;
 }
 
 static void set_curtain_pos_ms(curtain_t *curtain, curtain_pos_ms_t pos_ms)
@@ -306,8 +313,12 @@ static void set_curtain_pos_ms(curtain_t *curtain, curtain_pos_ms_t pos_ms)
 #endif
 	curtain->dest_pos_ms = pos_ms;
 
-	wiced_rtos_init_timer(&curtain->set_pos_timer, curtain->full_pos_ms, set_pos_step1_timer_handler, curtain );
-	wiced_rtos_send_asynchronous_event( curtain->thread, set_pos_step1_event_handler, curtain );
+	if(curtain->dest_pos_ms == 0) {
+		wiced_rtos_init_timer(&curtain->set_pos_timer, curtain->full_pos_ms, set_pos_step2_timer_handler, curtain );
+	} else {
+		wiced_rtos_init_timer(&curtain->set_pos_timer, curtain->dest_pos_ms, set_pos_step2_timer_handler, curtain );
+	}
+	wiced_rtos_send_asynchronous_event( curtain->thread, set_pos_start_event_handler, curtain );
 }
 
 static void set_pos_step1_timer_handler( void* arg )
@@ -331,6 +342,15 @@ static void set_pos_step1_timer_handler( void* arg )
 	}
 }
 
+static void set_pos_force_stop_handler(void* arg)
+{
+	curtain_t *curtain = (curtain_t *)arg;
+	
+	wiced_rtos_stop_timer(&curtain->set_pos_timer);
+	wiced_rtos_deinit_timer(&curtain->set_pos_timer);
+	wiced_rtos_send_asynchronous_event( curtain->thread, set_pos_stop_event_handler, curtain );
+}
+
 static void set_pos_step2_timer_handler( void* arg )
 {
 	curtain_t *curtain = (curtain_t *)arg;
@@ -339,12 +359,29 @@ static void set_pos_step2_timer_handler( void* arg )
 	wiced_rtos_send_asynchronous_event( curtain->thread, set_pos_stop_event_handler, curtain );
 }
 
+static wiced_result_t set_pos_start_event_handler( void* arg )
+{
+	curtain_t *curtain = (curtain_t *)arg;
+
+	WPRINT_APP_INFO(("set_pos_start_handler\n"));
+	//wiced_time_get_time(&curtain->last_op_timestamp);
+	wiced_rtos_start_timer(&curtain->set_pos_timer);
+	curtain->current_state = CURTAIN_STATE_PROGRAMMING;
+	if(curtain->dest_pos_ms == 0) {
+		motor_negative_run();
+	} else {
+		motor_positive_run();
+	}
+
+    return WICED_SUCCESS;
+}
+
 static wiced_result_t set_pos_step1_event_handler( void* arg )
 {
 	curtain_t *curtain = (curtain_t *)arg;
 
 	WPRINT_APP_INFO(("set_pos_step1_start_handler\n"));
-	wiced_time_get_time(&curtain->last_op_timestamp);
+	//wiced_time_get_time(&curtain->last_op_timestamp);
 	wiced_rtos_start_timer(&curtain->set_pos_timer);
 	curtain->current_state = CURTAIN_STATE_PROGRAMMING;
 	motor_negative_run();

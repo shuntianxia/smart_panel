@@ -75,7 +75,7 @@ wiced_result_t configure_device()
 {
     wiced_bool_t* device_configured;
 
-    if ( WICED_SUCCESS != wiced_dct_read_lock( (void**) &device_configured, WICED_FALSE, DCT_WIFI_CONFIG_SECTION, OFFSETOF(smart_panel_app_dct_t, device_configured), sizeof(wiced_bool_t) ) )
+    if ( WICED_SUCCESS != wiced_dct_read_lock( (void**) &device_configured, WICED_FALSE, DCT_APP_SECTION, OFFSETOF(smart_panel_app_dct_t, device_configured), sizeof(wiced_bool_t) ) )
     {
         return WICED_ERROR;
     }

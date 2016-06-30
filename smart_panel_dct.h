@@ -11,6 +11,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "wiced.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,6 +68,10 @@ typedef struct {
 /******************************************************
  *               Function Declarations
  ******************************************************/
+wiced_result_t load_app_data(smart_panel_app_dct_t* app_dct);
+void store_app_data(smart_panel_app_dct_t* app_dct);
+wiced_result_t load_wifi_data(platform_dct_wifi_config_t* wifi_dct);
+void store_wifi_data(platform_dct_wifi_config_t* wifi_dct);
 
 #ifdef __cplusplus
 } /*extern "C" */

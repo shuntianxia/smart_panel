@@ -11,9 +11,9 @@
 NAME := App_Smart_panel
 
 $(NAME)_SOURCES := smart_panel.c \
+                   smart_panel_dct.c \
 				   device_config.c \
 				   device_config_content.c \
-				   uart_interface \
 				   uart_keypad.c \
 				   light_dev.c \
 				   curtain_dev.c \
