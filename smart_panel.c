@@ -7,6 +7,7 @@
 #include "light_dev.h"
 #include "curtain_dev.h"
 #include "device_config.h"
+#include "uart_interface.h"
 
 /******************************************************
  *                      Macros
@@ -22,16 +23,8 @@
 #define PORTNUM                (50007)           /* UDP port */
 #define USER_PORT              (8088)           /* UDP port */
 #define SEND_UDP_RESPONSE
-#define RX_BUFFER_SIZE    256
-#define UART_QUEUE_DEPTH	5
-#define UART_RECEIVE_THREAD_STACK_SIZE      5*1024
-#define UART_SEND_THREAD_STACK_SIZE    5*1024
-//#define DEBUG_UART_RECEIVE
-
 #define TCP_CONNECTION_NUMBER_OF_RETRIES  3
-#define UART_FRAME_INTERVAL	5
-#define UART_FRAME_TIMEOUT	(UART_FRAME_INTERVAL/2)
-#define E200_UART WICED_UART_2
+
 
 //#define PRE_DEV_IP_ADDRESS MAKE_IPV4_ADDRESS(192,168,0,1)
 //#define UDP_BROADCAST_ADDR MAKE_IPV4_ADDRESS(192,168,0,255)
@@ -62,18 +55,6 @@ static void report_light_status(void *arg);
 /******************************************************
  *               Variable Definitions
  ******************************************************/
-static wiced_uart_config_t uart_config =
-{
-    .baud_rate    = 9600,
-    .data_width   = DATA_WIDTH_8BIT,
-    .parity       = NO_PARITY,
-    .stop_bits    = STOP_BITS_1,
-    .flow_control = FLOW_CONTROL_DISABLED,
-};
-
-wiced_ring_buffer_t rx_buffer;
-uint8_t             rx_data[RX_BUFFER_SIZE];
-uart_data_info uart_msg;
 
 #if 0
 static const configuration_entry_t app_config[] =
@@ -293,21 +274,6 @@ static void tcp_client_disable()
 }
 #endif
 
-static void uart_send_data_frame(cJSON *json, wiced_uart_t uart)
-{
-	char *out = cJSON_Print(json);
-	uart_frame_t *uart_frame = malloc(sizeof(uart_frame_t));
-	if(uart_frame != NULL) {
-		memset(uart_frame, 0, sizeof(uart_frame_t));
-		sprintf(uart_frame->data, "%s\r\n\r\n", out);
-		uart_frame->len = strlen(uart_frame->data);
-	}
-	wiced_uart_transmit_bytes( uart, uart_frame->data, uart_frame->len);
-	WPRINT_APP_INFO(("send to uart\n %s", uart_frame->data));
-	free(uart_frame);
-	free(out);
-}
-
 wiced_result_t send_udp_packet(wiced_udp_socket_t* socket, const wiced_ip_address_t* ip_addr, const uint16_t udp_port, char *buffer, uint16_t length)
 {
 	wiced_packet_t* 		 packet;
@@ -483,13 +449,17 @@ static wiced_result_t parse_device_id(cJSON *root)
 static void response_control_panel(dev_id_t dev_id, char *dev_type, int key_code, int key_status)
 {
 	cJSON *root;
+	char *out;
 
 	root = cJSON_CreateObject();
 	cJSON_AddStringToObject(root, "dev_id", dev_id);
 	cJSON_AddStringToObject(root, "dev_type", dev_type);
 	cJSON_AddNumberToObject(root, "key_code", key_code);
 	cJSON_AddNumberToObject(root, "key_status", key_status);
-	uart_send_data_frame(root, E200_UART);
+
+	out = cJSON_Print(root);
+	uart_send_data_frame(out, strlen(out));
+	free(out);
 	cJSON_Delete(root);
 }
 
@@ -853,7 +823,7 @@ static void send_control_data(dev_id_t dev_id, char *dev_type, int key_code, int
 	cJSON_Delete(root);
 }
 
-wiced_result_t master_parse_uart_msg(char *buffer, uint32_t length)
+static uart_handler_t master_parse_uart_msg(char *buffer, uint32_t length)
 {
 	cJSON *root, *dev_id, *dev_type, *key_code, *key_status, *bin_data;
 	
@@ -876,112 +846,6 @@ wiced_result_t master_parse_uart_msg(char *buffer, uint32_t length)
 		key_code->valueint, key_status->valueint, bin_data->valuestring);
     cJSON_Delete(root);
     return WICED_SUCCESS;
-}
-
-void uart_receive_handler_new(uint32_t arg)
-{
-	char c;
-	wiced_result_t result;
-	frame_state_t state = HEAD_SECTION;
-	char recv_buf[512];
-	unsigned int recv_len = 0;
-	
-	while(1)
-	{
-		if(state != FOURTH_FLAG_LN) {
-			result = wiced_uart_receive_bytes( E200_UART, &c, 1, UART_FRAME_TIMEOUT);
-			if(result != WICED_SUCCESS) {
-				continue;
-			}
-#ifdef DEBUG_UART_RECEIVE
-			WPRINT_APP_INFO(("%c", c));
-#endif
-			recv_buf[recv_len++] = c;
-			if(c == '\r') {
-				if(state == HEAD_SECTION) {
-					state = FIRST_FLAG_CR;
-				} else if(state == SECOND_FLAG_LN) {
-					state = THIRD_FLAG_CR;
-				}
-			} else if(c == '\n') {
-				if(state == FIRST_FLAG_CR) {
-					state = SECOND_FLAG_LN;
-				} else if(state == THIRD_FLAG_CR) {
-					state = FOURTH_FLAG_LN;
-				}
-			} else {
-				state = HEAD_SECTION;
-			}
-		} else {
-			state = HEAD_SECTION;
-			recv_buf[recv_len] = '\0';
-			master_parse_uart_msg(recv_buf, recv_len);
-			recv_len = 0;
-			memset(recv_buf, 0, sizeof(recv_buf));
-		}
-	}
-}
-
-void uart_receive_handler(uint32_t arg)
-{
-	char c;
-	wiced_result_t result;
-	
-	while ( 1 )
-	{
-		result = wiced_uart_receive_bytes( E200_UART, &c, 1, UART_FRAME_TIMEOUT);
-		if(result != WICED_SUCCESS) {
-			uart_msg.pos = 0;
-			continue;
-		}
-#ifdef DEBUG_UART_RECEIVE
-		WPRINT_APP_INFO(("%c", c));
-#endif
-		if(uart_msg.pos < sizeof(uart_msg.msg_buf)) {
-			uart_msg.msg_buf[uart_msg.pos++] = c;
-			if(c == '\n' && uart_msg.pos >= 6) {
-				if(strncmp((char*)&uart_msg.msg_buf[uart_msg.pos - 4], "\r\n\r\n", 4) == 0) {
-					WPRINT_APP_INFO(("uart_msg.pos = %d\n", uart_msg.pos));
-					master_parse_uart_msg((char*)uart_msg.msg_buf, uart_msg.pos);
-					uart_msg.pos = 0;
-					continue;
-				}
-			}
-		}
-	}
-}
-
-void uart_send_handler()
-{
-	uart_frame_t *uart_frame;
-
-	while(1) {
-		if(wiced_rtos_pop_from_queue(&glob_info.uart_send_queue, &uart_frame, WICED_NEVER_TIMEOUT) == WICED_SUCCESS) {
-			wiced_uart_transmit_bytes( E200_UART, uart_frame->data, uart_frame->len);
-#ifdef DEBUG_UART_SEND
-			WPRINT_APP_INFO(("uart send: uart_frame->len = %lu\n", uart_frame->len));
-#endif
-			free(uart_frame);
-			uart_frame = NULL;
-			host_rtos_delay_milliseconds(200);
-		}
-	}
-}
-
-wiced_result_t uart_transceiver_enable()
-{
-	/* Initialise ring buffer */
-    ring_buffer_init(&rx_buffer, rx_data, RX_BUFFER_SIZE );
-
-    /* Initialise UART. A ring buffer is used to hold received characters */
-    wiced_uart_init( E200_UART, &uart_config, &rx_buffer );
-
-	WICED_VERIFY( wiced_rtos_init_queue( &glob_info.uart_send_queue, NULL, sizeof(uart_frame_t *), UART_QUEUE_DEPTH ) );
-	WPRINT_APP_INFO(("create uart receive thread\n"));
-	wiced_rtos_create_thread(&glob_info.uart_recv_thread, WICED_APPLICATION_PRIORITY, "uart receive thread", uart_receive_handler_new, UART_RECEIVE_THREAD_STACK_SIZE, 0);
-	WPRINT_APP_INFO(("create uart send thread\n"));
-	wiced_rtos_create_thread(&glob_info.uart_send_thread, WICED_APPLICATION_PRIORITY, "uart send thread", uart_send_handler, UART_SEND_THREAD_STACK_SIZE, 0);
-	return WICED_SUCCESS;
 }
 
 static void light_keypad_handler( uart_key_code_t key_code, uart_key_event_t event )
@@ -1140,7 +1004,7 @@ static wiced_result_t device_init()
 	if(glob_info.dev_type == DEV_TYPE_MASTER) {
 		//glob_info.parse_socket_msg_fun = master_parse_socket_msg;
 		//uart_receive_enable(master_process_uart_msg);
-		uart_transceiver_enable();
+		uart_transceiver_enable(master_parse_uart_msg);
 	}else if(glob_info.dev_type == DEV_TYPE_LIGHT || glob_info.dev_type == DEV_TYPE_CURTAIN) {
 		if(glob_info.dev_type == DEV_TYPE_LIGHT) {
 			res = light_dev_init(&glob_info.specific.light_dev, WICED_HARDWARE_IO_WORKER_THREAD, report_device_status);

@@ -19,6 +19,7 @@ $(NAME)_SOURCES := smart_panel.c \
 				   curtain_dev.c \
 				   cJSON/cJSON.c \
 				   list.h \
+				   uart_interface.c \
 				   comm.c
 				   
 $(NAME)_INCLUDES := ./cJSON ./proto ./easy_setup

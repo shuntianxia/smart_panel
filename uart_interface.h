@@ -1,12 +1,3 @@
-/*
- * Copyright 2014, Broadcom Corporation
- * All Rights Reserved.
- *
- * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom Corporation;
- * the contents of this file may not be disclosed to third parties, copied
- * or duplicated in any form, in whole or in part, without the prior
- * written permission of Broadcom Corporation.
- */
 #pragma once
 
 #include "wiced_rtos.h"
@@ -31,7 +22,7 @@ extern "C" {
 /******************************************************
  *                 Type Definitions
  ******************************************************/
-typedef void (*uart_receive_handler_t)(void);
+typedef wiced_result_t (*uart_handler_t)(char *buffer, uint32_t length);
 
 
 /******************************************************
@@ -47,7 +38,8 @@ typedef void (*uart_receive_handler_t)(void);
 /******************************************************
  *               Function Declarations
  ******************************************************/
-//void device_process_uart_msg();
+wiced_result_t uart_transceiver_enable(uart_handler_t handler);
+void uart_send_data_frame(char *buffer, uint32_t length);
 
 #ifdef __cplusplus
 } /* extern "C" */

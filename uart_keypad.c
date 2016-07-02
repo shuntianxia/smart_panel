@@ -1,23 +1,9 @@
-/**
- * Copyright 2014, Broadcom Corporation
- * All Rights Reserved.
- *
- * This is UNPUBLISHED PROPRIETARY SOURCE CODE of Broadcom Corporation;
- * the contents of this file may not be disclosed to third parties, copied
- * or duplicated in any form, in whole or in part, without the prior
- * written permission of Broadcom Corporation.
- */
-
-/** @file
- *
- */
 #include "wiced.h"
 #include "uart_keypad.h"
 #include "wiced_time.h"
 #include "wiced_rtos.h"
 #include "wiced_utilities.h"
 #include "wwd_constants.h"
-#include "uart_interface.h"
 
 /******************************************************
  *                      Macros
@@ -26,10 +12,8 @@
 /******************************************************
  *                    Constants
  ******************************************************/
-
-#define DEBOUNCE_TIME_MS         (150)
+#define RX_BUFFER_SIZE    256
 #define UART_RECEIVE_STACK_SIZE (6200)
-#define RX_BUFFER_SIZE    64
 
 /******************************************************
  *                   Enumerations
@@ -74,13 +58,10 @@ static wiced_result_t key_long_pressed_event_handler( void* arg );
 static wiced_result_t key_long_released_event_handler( void* arg );
 static wiced_result_t key_long_long_pressed_event_handler( void* arg );
 static wiced_result_t key_long_long_released_event_handler( void* arg );
-static void device_process_uart_msg(uint32_t arg);
-
-
+static void uart_receive_handler(uint32_t arg);
 /******************************************************
  *               Variable Definitions
  ******************************************************/
-static wiced_thread_t uart_thread;
 static uart_keypad_internal_t* keypad_internal;
 static wiced_uart_config_t uart_config =
 {
@@ -92,12 +73,12 @@ static wiced_uart_config_t uart_config =
 };
 
 static wiced_ring_buffer_t rx_buffer;
-static uint8_t rx_data[RX_BUFFER_SIZE];
-
+static uint8_t             rx_data[RX_BUFFER_SIZE];
+static wiced_thread_t		uart_thread;
 /******************************************************
  *               Function Definitions
  ******************************************************/
-wiced_result_t uart_receive_enable(wiced_thread_function_t function)
+static wiced_result_t uart_receive_enable(wiced_thread_function_t function)
 {
 	/* Initialise ring buffer */
 	ring_buffer_init(&rx_buffer, rx_data, RX_BUFFER_SIZE );
@@ -133,7 +114,7 @@ wiced_result_t uart_keypad_enable( uart_keypad_t* keypad, wiced_worker_thread_t*
 
     wiced_rtos_init_timer( &keypad->internal->check_state_timer, held_event_interval_ms, check_state_timer_handler, (void*) keypad->internal );
 
-	uart_receive_enable(device_process_uart_msg);
+	uart_receive_enable(uart_receive_handler);
 
     return WICED_SUCCESS;
 }
@@ -151,7 +132,7 @@ wiced_result_t uart_keypad_disable( uart_keypad_t *keypad )
     return WICED_SUCCESS;
 }
 
-static void device_process_uart_msg(uint32_t arg)
+static void uart_receive_handler(uint32_t arg)
 {
 	static int key_pos = 0;
 	uart_keypad_internal_t* keypad = keypad_internal;
