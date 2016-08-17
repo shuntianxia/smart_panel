@@ -115,7 +115,7 @@ wiced_result_t light_dev_init(light_dev_t **light_dev_arg, wiced_worker_thread_t
 void switch_light_status(light_t *light)
 {
 	wiced_bool_t gpio_status;
-	light_dev_t *light_dev = light->owner;
+	//light_dev_t *light_dev = light->owner;
 
 	light_status_t status = light->status;
 
@@ -124,12 +124,13 @@ void switch_light_status(light_t *light)
 	} else if(status == LIGHT_STATUS_OFF) {
 		set_light_status_internal(light, LIGHT_STATUS_ON);
 	}
-	light_dev->function(light);
+	//light_dev->function(light);
 	return;
 }
 
 static void set_light_status_internal(light_t *light, light_status_t status)
 {
+	light_dev_t *light_dev = light->owner;
 	light->status = status;
 	if(status == LIGHT_STATUS_ON) {
 		wiced_gpio_output_high( light->relay_io);
@@ -139,6 +140,7 @@ static void set_light_status_internal(light_t *light, light_status_t status)
 		wiced_gpio_output_low( light->relay_io );
 		WPRINT_APP_INFO(("light_%d is off\n", light->light_no));
 	}
+	light_dev->function(light);
 	return;
 }
 # if 0

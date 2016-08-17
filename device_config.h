@@ -46,7 +46,7 @@ extern "C" {
 /******************************************************
  *               Function Declarations
  ******************************************************/
-wiced_result_t configure_device();
+wiced_result_t startup_configuration_page();
 
 #ifdef __cplusplus
 } /* extern "C" */

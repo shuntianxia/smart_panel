@@ -71,7 +71,7 @@ wiced_http_server_t*         http_server;
  *               Function Definitions
  ******************************************************/
 
-wiced_result_t configure_device()
+wiced_result_t startup_configuration_page()
 {
     wiced_bool_t* device_configured;
 

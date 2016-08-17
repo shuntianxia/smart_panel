@@ -945,57 +945,45 @@ static void report_device_status(void *arg)
 	cJSON_Delete(root);
 }
 
-static void init_device_id()
+static wiced_result_t device_basic_init()
 {
 	wiced_mac_t mac;
+	char ssid[64] = {0};
+	//smart_panel_app_dct_t* dct_app;
+	wiced_result_t res;
 	
+	//get mac addr
 	wwd_wifi_get_mac_address( &mac, WWD_STA_INTERFACE );
 
+	//init_device_id
 	memset(glob_info.dev_id, 0, sizeof(dev_id_t));
 
 	sprintf(glob_info.dev_id, "%02x%02x%02x%02x%02x%02x", \
 		mac.octet[0], mac.octet[1], mac.octet[2], mac.octet[3], mac.octet[4], mac.octet[5]);
-}
 
-static void init_ssid()
-{
-	char ssid[64] = {0};
-	//char passwd[64] = {0};
-	wiced_mac_t mac;
-
-	wwd_wifi_get_mac_address( &mac, WWD_STA_INTERFACE );
+	WPRINT_APP_INFO(("device_id is %s\n", glob_info.dev_id));
 	
+	//init_ssid
 	sprintf(ssid, "smart_panel_%02x%02x%02x", mac.octet[3], mac.octet[4], mac.octet[5]);
-
 	load_wifi_data(&glob_info.wifi_dct);
 	memcpy(glob_info.wifi_dct.soft_ap_settings.SSID.value, ssid, strlen(ssid) + 1);
 	glob_info.wifi_dct.soft_ap_settings.SSID.length = strlen(ssid);
 	store_wifi_data(&glob_info.wifi_dct);
 	//memcpy(glob_info.wifi_dct->soft_ap_settings.security_key, passwd, strlen(passwd) + 1);
 	//glob_info.wifi_dct->soft_ap_settings.security_key_length = strlen(passwd);
+
+	load_app_data(&glob_info.app_dct);
+	glob_info.configured = glob_info.app_dct.device_configured;
+	glob_info.dev_type = glob_info.app_dct.dev_type;
+	//glob_info.dev_index = glob_info.app_dct.dev_index;
+	strncpy(glob_info.dev_name, glob_info.app_dct.dev_name, sizeof(glob_info.dev_name));
+	WPRINT_APP_INFO(("glob_info.dev_name is %s\n", glob_info.dev_name));
+	return WICED_SUCCESS;
 }
 
-static wiced_result_t device_init()
+static wiced_result_t device_function_init()
 {
-	wiced_mac_t mac;
-	smart_panel_app_dct_t* dct_app;
 	wiced_result_t res;
-	
-	init_device_id();
-	init_ssid();
-
-	WPRINT_APP_INFO(("device_id is %s\n", glob_info.dev_id));
-	
-	if(	wiced_dct_read_lock( (void**) &dct_app, WICED_TRUE, DCT_APP_SECTION, 0, sizeof( *dct_app ) ) != WICED_SUCCESS)
-	{
-        return WICED_ERROR;
-    }
-	glob_info.configured = dct_app->device_configured;
-	glob_info.dev_type = dct_app->dev_type;
-	//glob_info.dev_index = dct_app->dev_index;
-	strncpy(glob_info.dev_name, dct_app->dev_name, sizeof(glob_info.dev_name));
-	WPRINT_APP_INFO(("glob_info.dev_name is %s\n", glob_info.dev_name));
-	wiced_dct_read_unlock( dct_app, WICED_TRUE );
 
 	if(glob_info.configured == WICED_FALSE) {
 		return WICED_ERROR;
@@ -1035,10 +1023,12 @@ void application_start( )
     /* Initialise the device and WICED framework */
     wiced_init( );
 
-	device_init();
+	device_basic_init();
 	
 	/* Configure the device */
-    configure_device();
+    startup_configuration_page();
+
+	device_function_init();
 
 	WPRINT_APP_INFO(("end ...\n"));
 }
